@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HEIC → PNG</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111;
+    --border: #222;
+    --green: #00ff41;
+    --green-dim: #00ff4133;
+    --text: #e0e0e0;
+    --muted: #555;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,255,65,0.015) 2px,
+      rgba(0,255,65,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 560px;
+  }
+
+  header {
+    margin-bottom: 2.5rem;
+    text-align: center;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(2rem, 6vw, 3.2rem);
+    letter-spacing: -0.02em;
+    color: var(--green);
+    text-shadow: 0 0 30px rgba(0,255,65,0.4);
+    line-height: 1;
+  }
+
+  h1 span { color: var(--muted); }
+
+  .sub {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .drop-zone {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    background: var(--surface);
+  }
+
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--green);
+    background: var(--green-dim);
+  }
+
+  .drop-zone input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    display: block;
+  }
+
+  .drop-label {
+    font-size: 0.85rem;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .drop-label strong { color: var(--green); }
+
+  .drop-sub {
+    margin-top: 0.5rem;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .file-list {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .file-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.78rem;
+  }
+
+  .file-name { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-status { color: var(--muted); white-space: nowrap; }
+  .file-status.done { color: var(--green); }
+  .file-status.error { color: #ff4141; }
+  .file-status.processing { color: #ffdd41; }
+
+  .btn {
+    margin-top: 1.5rem;
+    width: 100%;
+    padding: 0.9rem;
+    background: var(--green);
+    color: #000;
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+
+  .btn:hover { opacity: 0.85; }
+  .btn:active { transform: scale(0.99); }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .notice {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: #111;
+    border: 1px solid #1a1a1a;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .notice strong { color: #ffdd41; }
+
+  .progress-bar {
+    height: 2px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--green);
+    width: 0%;
+    transition: width 0.3s;
+    box-shadow: 0 0 8px var(--green);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>HEIC <span>→</span> PNG</h1>
+    <p class="sub">batch converter · client-side · no upload</p>
+  </header>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".heic,.heif,image/heic,image/heif" multiple>
+    <span class="drop-icon">📷</span>
+    <p class="drop-label"><strong>Drop HEIC files here</strong><br>or click to browse</p>
+    <p class="drop-sub">Multiple files supported</p>
+  </div>
+
+  <div class="progress-bar" id="progressBar" style="display:none">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+
+  <div class="file-list" id="fileList"></div>
+
+  <button class="btn" id="convertBtn" disabled>Convert to PNG</button>
+
+  <div class="notice">
+    <strong>⚠ Browser HEIC support is limited.</strong><br>
+    This tool uses the <code>heic2any</code> library to convert files entirely in your browser — nothing is uploaded. If conversion fails, try <strong>CloudConvert</strong> or <strong>iLoveIMG</strong> as alternatives.
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/heic2any/0.0.4/heic2any.min.js"></script>
+<script>
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const fileList = document.getElementById('fileList');
+  const convertBtn = document.getElementById('convertBtn');
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+
+  let selectedFiles = [];
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    handleFiles([...e.dataTransfer.files]);
+  });
+
+  fileInput.addEventListener('change', () => handleFiles([...fileInput.files]));
+
+  function handleFiles(files) {
+    const heicFiles = files.filter(f => f.name.toLowerCase().match(/\.(heic|heif)$/) || f.type.includes('heic') || f.type.includes('heif'));
+    if (!heicFiles.length) { alert('Please select HEIC/HEIF files.'); return; }
+    selectedFiles = heicFiles;
+    fileList.innerHTML = '';
+    heicFiles.forEach(f => {
+      const item = document.createElement('div');
+      item.className = 'file-item';
+      item.id = 'file-' + f.name.replace(/\W/g, '_');
+      item.innerHTML = `<span class="file-name">${f.name}</span><span class="file-status" id="status-${f.name.replace(/\W/g, '_')}">ready</span>`;
+      fileList.appendChild(item);
+    });
+    convertBtn.disabled = false;
+  }
+
+  convertBtn.addEventListener('click', async () => {
+    if (!selectedFiles.length) return;
+    convertBtn.disabled = true;
+    progressBar.style.display = 'block';
+    progressFill.style.width = '0%';
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      const statusEl = document.getElementById('status-' + file.name.replace(/\W/g, '_'));
+      statusEl.textContent = 'converting...';
+      statusEl.className = 'file-status processing';
+
+      try {
+        const blob = await heic2any({ blob: file, toType: 'image/png', quality: 1 });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name.replace(/\.(heic|heif)$/i, '.png');
+        a.click();
+        URL.revokeObjectURL(url);
+        statusEl.textContent = '✓ saved';
+        statusEl.className = 'file-status done';
+      } catch (err) {
+        statusEl.textContent = '✗ failed';
+        statusEl.className = 'file-status error';
+        console.error(err);
+      }
+
+      progressFill.style.width = ((i + 1) / selectedFiles.length * 100) + '%';
+    }
+
+    convertBtn.disabled = false;
+  });
+</script>
+</body>
+</html>
